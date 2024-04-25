@@ -1,2 +1,2 @@
-# reliability-
+# reliability
 Reliability for distributed systems. 
