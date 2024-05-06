@@ -1,5 +1,19 @@
+import math
+from math import e
+
 import networkx as nx
+import numpy as np
+import sympy as sym
+import ttg
 from matplotlib import pyplot as plt
+from scipy.integrate import quad
+from tqdm import tqdm
+
+t = sym.symbols('t')
+
+
+def expr(fail_rate=0.0):
+    return e ** (-fail_rate * t)
 
 
 def plot_graph(G):
@@ -71,7 +85,8 @@ def join_series(G, node1, node2):
 
 # Function to join nodes in parallel
 def join_parallel(G, node1, node2):
-    new_node = 1 / (1 / G.nodes[node1]["value"] + 1 / G.nodes[node2]["value"] - 1 / (G.nodes[node1]["value"] + G.nodes[node2]["value"]))
+    new_node = 1 / (1 / G.nodes[node1]["value"] + 1 / G.nodes[node2]["value"] - 1 / (
+            G.nodes[node1]["value"] + G.nodes[node2]["value"]))
 
     G.add_node("(" + node1 + "||" + node2 + ")", value=new_node)
     # Connect the new node to the neighbors of the old nodes
@@ -89,41 +104,81 @@ def reduce_graph(G, start_node, end_node):
     G.add_edge("end", end_node)
     end_node = "end"
 
-    # plot_graph(G)
-
-    # slice only the paths that matters for us
-    all_paths_list = list(nx.all_simple_paths(G, source=start_node, target=end_node))
-    minimum_nodes = list(set([x for sublist in all_paths_list for x in sublist]))
-    G = nx.Graph(G.subgraph(minimum_nodes))
-    # plot_graph(G)
-
-    reduced = False
-    while not reduced:
-        reduced = True
-        # Look for series nodes and join them
-        for node1, node2 in list(G.edges()):
-            if are_in_series(G, node1, node2):
-                join_series(G, node1, node2)
-                reduced = False
-                break
-        # Looks for parallel nodes and join them
-        parallel_nodes = find_parallel_nodes(G)
-        if len(parallel_nodes) > 0:
-            reduced = False
-            (node1, node2) = parallel_nodes[0]
-            join_parallel(G, node1, node2)
-
-        # plot_graph(G)
-
-    G.remove_node("start")
-    G.remove_node("end")
-
-    # Aggregating the helper nodes to convert the graph into a float64 die.
-    node_values = [data["value"] for node, data in G.nodes(data=True)]
-    aggregate = 0
-    for node, data in G.nodes(data=True):
-        aggregate += data["value"]
-
-    return G, aggregate / len(node_values)
+    return None, markov_chain(G)
 
 
+# Calcula a integral inexplicavel
+def itamar_thing(reliability):
+    mttf, integration_error = quad(sym.lambdify(t, reliability, 'numpy'), 0, np.inf)
+
+    return 1 / (mttf + 1e-9)
+
+
+def markov_chain(G):
+    # Get a list of nodes along with their data
+    nodes_names = np.array(G.nodes(data=False))
+
+    # Create a truth table with propositional expressions
+    truth_table_generator = ttg.Truths(nodes_names.tolist(), ascending=True)
+
+    fail_rate_list = [G.nodes[node_name]["value"] for node_name in nodes_names]
+
+    # R(t) = Reliability function (algebraic) for each node.
+    r_array = np.array([expr(fail_rate) for fail_rate in fail_rate_list])
+
+    # If 1, node is working. If 0, the respective node is in fail state.
+    truth_table = truth_table_generator.as_pandas.values
+    ones_matrix = np.ones_like(truth_table)
+    complementary_truth_table = ones_matrix - truth_table  # Replace 1 by 0 and 0 by 1.
+
+    # Prob of node working: R(t). Prob of node failing: 1 - R(t).
+    reliability_truth_table = (truth_table * r_array) + (complementary_truth_table * (ones_matrix - r_array))
+
+    # Compute the algebraic productory for each row.
+    eq_reliability_table = np.prod(reliability_truth_table, axis=1)
+
+    eq_reliability = 0
+    for i, nodes_working in tqdm(enumerate(truth_table), total=truth_table.shape[0]):
+        # Get graph composed by non-failed nodes only.
+        non_failed_nodes = nodes_names[nodes_working == 1].tolist()
+        subgraph = G.subgraph(non_failed_nodes)
+
+        # If you have a path from start to end, the system still works
+        if subgraph.has_node("start"):
+            if subgraph.has_node("end"):
+                if nx.has_path(subgraph, "start", "end"):
+                    eq_reliability = eq_reliability + eq_reliability_table[i]
+
+    return itamar_thing(eq_reliability)
+
+
+if __name__ == '__main__':
+    G = nx.Graph()
+    G.add_node("start",
+               value=0.0)  # The start node is a requirement of the script, every generator must derive from it.
+
+    # Value is your Lambda. 1/m = Lambda (fails per time unit)
+    G.add_node("gerador", value=0.1)
+    G.add_node("barra1", value=0.1)
+    G.add_node("disjuntor1", value=0.1)
+    G.add_node("trafo1", value=0.3)
+    G.add_node("disjuntor2", value=0.2)
+    G.add_node("trafo2", value=0.1)
+    G.add_node("barra2", value=0.5)
+
+    G.add_edge("start", "gerador")
+    G.add_edge("gerador", "barra1")
+    G.add_edge("barra1", "disjuntor1")
+    G.add_edge("barra1", "disjuntor2")
+    G.add_edge("disjuntor1", "trafo1")
+    G.add_edge("disjuntor2", "trafo2")
+    G.add_edge("trafo1", "barra2")
+    G.add_edge("trafo2", "barra2")
+
+    # Replace with <YOUR-target-node> for reliability calcs
+    target_node = "barra2"
+
+    # Reduce the graph
+    reduced_G, eq_lambda = reduce_graph(G, "start", target_node)
+
+    print("\n\nO valor de Lambda equivalente do seu sistema é: ", eq_lambda)
