@@ -99,19 +99,16 @@ def join_parallel(G, node1, node2):
 
 
 def reduce_graph(G, start_node, end_node):
-    # Start and end nodes makes to slice the graph
-    G.add_node("end", value=0.0)
-    G.add_edge("end", end_node)
-    end_node = "end"
-
     return None, markov_chain(G)
 
 
 # Calcula a integral inexplicavel
 def itamar_thing(reliability):
     mttf, integration_error = quad(sym.lambdify(t, reliability, 'numpy'), 0, np.inf)
+    # sym.integrate(reliability, (t, 0, sym.oo))
 
-    return 1 / (mttf + 1e-9)
+    lambda_eq = 1 / (mttf + 1e-9)
+    return lambda_eq
 
 
 def markov_chain(G):
@@ -147,7 +144,9 @@ def markov_chain(G):
         if subgraph.has_node("start"):
             if subgraph.has_node("end"):
                 if nx.has_path(subgraph, "start", "end"):
+                    y = eq_reliability_table[i]
                     eq_reliability = eq_reliability + eq_reliability_table[i]
+                    x = 1
 
     return itamar_thing(eq_reliability)
 
@@ -161,28 +160,22 @@ def markov_chain(G):
 if __name__ == '__main__':
     G = nx.Graph()
     G.add_node("start",
-               value=0.0)  # The start node is a requirement of the script, every generator must derive from it.
+               value=1.0000)  # The start node is a requirement of the script, every generator must derive from it.
+
+    G.add_node("end",
+               value=0.0000)
 
     # Value is your Lambda. 1/m = Lambda (fails per time unit)
-    G.add_node("gerador", value=0.1)
-    G.add_node("barra1", value=0.1)
-    G.add_node("disjuntor1", value=0.1)
-    G.add_node("trafo1", value=0.3)
-    G.add_node("disjuntor2", value=0.2)
-    G.add_node("trafo2", value=0.1)
-    G.add_node("barra2", value=0.5)
+    G.add_node("trafo1", value=0.4)
+    G.add_node("trafo2", value=0.3)
 
-    G.add_edge("start", "gerador")
-    G.add_edge("gerador", "barra1")
-    G.add_edge("barra1", "disjuntor1")
-    G.add_edge("barra1", "disjuntor2")
-    G.add_edge("disjuntor1", "trafo1")
-    G.add_edge("disjuntor2", "trafo2")
-    G.add_edge("trafo1", "barra2")
-    G.add_edge("trafo2", "barra2")
+    G.add_edge("start", "trafo1")
+    G.add_edge("start", "trafo2")
+    G.add_edge("trafo1", "end")
+    G.add_edge("trafo2", "end")
 
     # Replace with <YOUR-target-node> for reliability calcs
-    target_node = "barra2"
+    target_node = "end"
 
     # Reduce the graph
     reduced_G, eq_lambda = reduce_graph(G, "start", target_node)
