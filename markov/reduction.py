@@ -151,12 +151,6 @@ def markov_chain(G):
 
     return itamar_thing(eq_reliability)
 
-    # eq_reliability = 0
-    # for i, nodes_working in tqdm(enumerate(truth_table), total=truth_table.shape[0]):
-    #     eq_reliability = eq_reliability + eq_reliability_table[i]
-    #
-    # return eq_reliability.subs(t, 1).evalf()
-
 
 if __name__ == '__main__':
     G = nx.Graph()
