@@ -1,4 +1,3 @@
-import math
 from math import e
 
 import networkx as nx
@@ -12,8 +11,22 @@ from tqdm import tqdm
 t = sym.symbols('t')
 
 
-def expr(fail_rate=0.0):
-    return e ** (-fail_rate * t)
+def expr(fail_rate=0.0, mttr=None):
+
+    if mttr is None:
+        return e ** (-fail_rate * t)
+    else:
+        # increment for numerical stability
+        fail_rate = fail_rate + 1e-9
+        mttr = mttr + 1e-9
+        return (1 / fail_rate) / (mttr + 1 / fail_rate)
+
+
+def horas_para_anos(horas):
+    # Considerando que 1 ano tem 365.25 dias
+    dias = horas / 24
+    anos = dias / 365.25
+    return anos
 
 
 def plot_graph(G):
@@ -32,79 +45,13 @@ def plot_graph(G):
     plt.show()
 
 
-# Function to check if two nodes are in series
-def are_in_series(G, node1, node2):
-    # Nodes are in series if each has degree 2 and they are connected to each other
-    return G.degree(node1) == 2 and G.degree(node2) == 2 and G.has_edge(node1, node2)
-
-
-# Create a function to find nodes with exactly two common neighbors and no other neighbors
-def find_parallel_nodes(G):
-    # Initialize an empty list to store nodes with exactly two common neighbors
-    nodes_with_two_common_neighbors = []
-
-    # Iterate over all nodes in the graph
-    for node in G.nodes():
-        # Get neighbors of the current node
-        neighbors = set(G.neighbors(node))
-
-        # Check if the current node has exactly two neighbors
-        if len(neighbors) == 2:
-            # Iterate over all other nodes in the graph
-            for other_node in G.nodes():
-                # Skip if it's the same node
-                if other_node == node:
-                    continue
-
-                # Get neighbors of the other node
-                other_neighbors = set(G.neighbors(other_node))
-
-                # Check if the other node also has exactly two neighbors
-                if len(other_neighbors) == 2:
-                    # Check if the two nodes share the same neighbors
-                    if neighbors == other_neighbors:
-                        # Add the pair of nodes to the list
-                        nodes_with_two_common_neighbors.append((node, other_node))
-
-    # Return the list of nodes with exactly two common neighbors
-    return nodes_with_two_common_neighbors
-
-
-# Function to join nodes in series
-def join_series(G, node1, node2):
-    new_node = G.nodes[node1]["value"] + G.nodes[node2]["value"]
-    G.add_node("(" + node1 + "+" + node2 + ")", value=new_node)
-    # Connect the new node to the neighbors of the old nodes
-    for neighbor in set(G.neighbors(node1)).union(G.neighbors(node2)):
-        if neighbor not in [node1, node2]:
-            G.add_edge("(" + node1 + "+" + node2 + ")", neighbor)
-    G.remove_node(node1)
-    G.remove_node(node2)
-    return new_node
-
-
-# Function to join nodes in parallel
-def join_parallel(G, node1, node2):
-    new_node = 1 / (1 / G.nodes[node1]["value"] + 1 / G.nodes[node2]["value"] - 1 / (
-            G.nodes[node1]["value"] + G.nodes[node2]["value"]))
-
-    G.add_node("(" + node1 + "||" + node2 + ")", value=new_node)
-    # Connect the new node to the neighbors of the old nodes
-    for neighbor in set(G.neighbors(node1)).union(G.neighbors(node2)):
-        if neighbor not in [node1, node2]:
-            G.add_edge("(" + node1 + "||" + node2 + ")", neighbor)
-    G.remove_node(node1)
-    G.remove_node(node2)
-    return new_node
-
-
-def reduce_graph(G, start_node, end_node):
+def reduce_graph(G, start_node, end_node, repairable=False):
     # Start and end nodes makes to slice the graph
-    G.add_node("end", value=0.0)
+    G.add_node("end", value=(0.0, 0.0)) if repairable else G.add_node("end", value=0.0)
     G.add_edge("end", end_node)
     end_node = "end"
 
-    return None, markov_chain(G)
+    return None, markov_chain(G, repairable)
 
 
 # Calcula a integral inexplicavel
@@ -114,7 +61,7 @@ def itamar_thing(reliability):
     return 1 / (mttf + 1e-9)
 
 
-def markov_chain(G):
+def markov_chain(G, repairable=False):
     # Get a list of nodes along with their data
     nodes_names = np.array(G.nodes(data=False))
 
@@ -124,7 +71,10 @@ def markov_chain(G):
     fail_rate_list = [G.nodes[node_name]["value"] for node_name in nodes_names]
 
     # R(t) = Reliability function (algebraic) for each node.
-    r_array = np.array([expr(fail_rate) for fail_rate in fail_rate_list])
+    if repairable is False:
+        r_array = np.array([expr(fail_rate) for fail_rate in fail_rate_list])
+    else:
+        r_array = np.array([expr(fail_rate, mttr) for (fail_rate, mttr) in fail_rate_list])
 
     # If 1, node is working. If 0, the respective node is in fail state.
     truth_table = truth_table_generator.as_pandas.values
@@ -149,7 +99,10 @@ def markov_chain(G):
                 if nx.has_path(subgraph, "start", "end"):
                     eq_reliability = eq_reliability + eq_reliability_table[i]
 
-    return itamar_thing(eq_reliability)
+    if repairable is False:
+        return itamar_thing(eq_reliability)
+    else:
+        return eq_reliability
 
 
 if __name__ == '__main__':
