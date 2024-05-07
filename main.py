@@ -1,8 +1,9 @@
 from reduction import *
 
 G = nx.Graph()
-G.add_node("start",
-           value=(0.0, 0.0))  # The start node is a requirement of the script, every generator must derive from it.
+
+# The start node is a requirement of the script, every power source must derive from it.
+G.add_node("start", value=(0.0, 0.0))
 
 # Value is your (Lambda and MTTR).
 # 1/m = Lambda (fails per year). MTTR = mean time to repair (hours)
