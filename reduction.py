@@ -3,7 +3,6 @@ from math import e
 import networkx as nx
 import numpy as np
 import sympy as sym
-import ttg
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
 from tqdm import tqdm
@@ -60,12 +59,36 @@ def itamar_thing(reliability):
     return 1 / (mttf + 1e-9)
 
 
+def truth_table_generator(header):
+    """
+Receives a list of names for each column (header) and returns a
+integer simple truth table.
+    :param header: List of names for each column.
+    """
+    # Generate truth values (True or False) for each name
+    truth_values = [True, False]
+
+    # Create a meshgrid of truth values for each name
+    truth_combinations = np.array(np.meshgrid(*([truth_values] * len(header)))).T.reshape(-1, len(header))
+
+    # Convert boolean values to 1s and 0s
+    truth_table = truth_combinations.astype(int)
+
+    # Generate a binary weight for each column based on its position
+    weights = 2 ** np.arange(truth_table.shape[1])[::-1]
+
+    # Calculate the weighted sum of each row to get a unique number for each combination
+    sorted_indices = np.dot(truth_table, weights)
+
+    # Use argsort to get the indices that would sort the table
+    sorted_truth_table = truth_table[np.argsort(sorted_indices)]
+
+    return sorted_truth_table
+
+
 def markov_chain(G, repairable=False):
     # Get a list of nodes along with their data
     nodes_names = np.array(G.nodes(data=False))
-
-    # Create a truth table with propositional expressions
-    truth_table_generator = ttg.Truths(nodes_names.tolist(), ascending=True)
 
     fail_rate_list = [G.nodes[node_name]["value"] for node_name in tqdm(nodes_names, desc="Acquiring nodes names")]
 
@@ -77,7 +100,7 @@ def markov_chain(G, repairable=False):
             [expr(fail_rate, mttr) for (fail_rate, mttr) in tqdm(fail_rate_list, desc="Generating reliability array")])
 
     # If 1, node is working. If 0, the respective node is in fail state.
-    truth_table = truth_table_generator.as_pandas.values  # esta linha precisa de otimizacao
+    truth_table = truth_table_generator(nodes_names.tolist())
     ones_matrix = np.ones_like(truth_table)
     complementary_truth_table = ones_matrix - truth_table  # Replace 1 by 0 and 0 by 1.
 
