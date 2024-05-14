@@ -12,7 +12,6 @@ t = sym.symbols('t')
 
 
 def expr(fail_rate=0.0, mttr=None):
-
     if mttr is None:
         return e ** (-fail_rate * t)
     else:
@@ -68,16 +67,17 @@ def markov_chain(G, repairable=False):
     # Create a truth table with propositional expressions
     truth_table_generator = ttg.Truths(nodes_names.tolist(), ascending=True)
 
-    fail_rate_list = [G.nodes[node_name]["value"] for node_name in nodes_names]
+    fail_rate_list = [G.nodes[node_name]["value"] for node_name in tqdm(nodes_names, desc="Acquiring nodes names")]
 
     # R(t) = Reliability function (algebraic) for each node.
     if repairable is False:
-        r_array = np.array([expr(fail_rate) for fail_rate in fail_rate_list])
+        r_array = np.array([expr(fail_rate) for fail_rate in tqdm(fail_rate_list, desc="Generating reliability array")])
     else:
-        r_array = np.array([expr(fail_rate, mttr) for (fail_rate, mttr) in fail_rate_list])
+        r_array = np.array(
+            [expr(fail_rate, mttr) for (fail_rate, mttr) in tqdm(fail_rate_list, desc="Generating reliability array")])
 
     # If 1, node is working. If 0, the respective node is in fail state.
-    truth_table = truth_table_generator.as_pandas.values
+    truth_table = truth_table_generator.as_pandas.values  # esta linha precisa de otimizacao
     ones_matrix = np.ones_like(truth_table)
     complementary_truth_table = ones_matrix - truth_table  # Replace 1 by 0 and 0 by 1.
 
@@ -88,7 +88,7 @@ def markov_chain(G, repairable=False):
     eq_reliability_table = np.prod(reliability_truth_table, axis=1)
 
     eq_reliability = 0
-    for i, nodes_working in tqdm(enumerate(truth_table), total=truth_table.shape[0]):
+    for i, nodes_working in tqdm(enumerate(truth_table), total=truth_table.shape[0], desc="Finishing study"):
         # Get graph composed by non-failed nodes only.
         non_failed_nodes = nodes_names[nodes_working == 1].tolist()
         subgraph = G.subgraph(non_failed_nodes)
