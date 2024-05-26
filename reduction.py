@@ -52,8 +52,8 @@ def reduce_graph(G, start_node, end_node, repairable=False):
     return None, markov_chain(G, repairable)
 
 
-# Calcula a integral inexplicavel
-def itamar_thing(reliability):
+# Approximates the composition of several exponentials by one.
+def itamar_suggestion(reliability):
     mttf, integration_error = quad(sym.lambdify(t, reliability, 'numpy'), 0, np.inf)
 
     return 1 / (mttf + 1e-9)
@@ -123,7 +123,7 @@ def markov_chain(G, repairable=False):
                     eq_reliability = eq_reliability + eq_reliability_table[i]
 
     if repairable is False:
-        return itamar_thing(eq_reliability)
+        return itamar_suggestion(eq_reliability)
     else:
         return eq_reliability
 

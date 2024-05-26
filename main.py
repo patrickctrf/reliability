@@ -32,8 +32,8 @@ repairable = True
 
 # Reduce the graph
 if repairable is True:
-    reduced_G, eq_reliability = reduce_graph(G, "start", target_node, repairable)
-    print("\n\nO valor de confiabilidade equivalente do seu sistema é: ", eq_reliability)
+    reduced_G, eq_availability = reduce_graph(G, "start", target_node, repairable)
+    print("\n\nO valor de confiabilidade equivalente do seu sistema é: ", eq_availability)
 else:
     reduced_G, eq_lambda = reduce_graph(G, "start", target_node, repairable)
     print("\n\nO valor de Lambda equivalente do seu sistema é: ", eq_lambda)
